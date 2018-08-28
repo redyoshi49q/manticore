@@ -103,6 +103,9 @@ def parse_arguments():
     parser.add_argument('--detect-externalcall', action='store_true',
                         help='Enable detection of reachable external call or ether leak to sender or arbitrary address')
 
+    parser.add_argument('--detect-transaction-order', action='store_true',
+                        help='Enable detection of possible transaction order vulnerabilities (Ethereum only)')
+
     parser.add_argument('--detect-all', action='store_true',
                         help='Enable all detector heuristics (Ethereum only)')
 
@@ -128,7 +131,10 @@ def parse_arguments():
 
 
 def ethereum_cli(args):
-    from .ethereum import ManticoreEVM, DetectInvalid, DetectIntegerOverflow, DetectUninitializedStorage, DetectUninitializedMemory, FilterFunctions, DetectReentrancy, DetectUnusedRetVal, DetectSelfdestruct, LoopDepthLimiter, DetectExternalCallAndLeak
+    from .ethereum import ManticoreEVM, DetectInvalid, DetectIntegerOverflow, DetectUninitializedStorage, \
+        DetectUninitializedMemory, FilterFunctions, DetectReentrancy, DetectUnusedRetVal, \
+        DetectSelfdestruct, LoopDepthLimiter, DetectExternalCallAndLeak, DetectTransactionOrderIndependence
+
     log.init_logging()
 
     m = ManticoreEVM(procs=args.procs, workspace_url=args.workspace)
@@ -149,6 +155,8 @@ def ethereum_cli(args):
         m.register_detector(DetectSelfdestruct())
     if args.detect_all or args.detect_externalcall:
         m.register_detector(DetectExternalCallAndLeak())
+    if args.detect_all or args.detect_transaction_order:
+        m.register_detector(DetectTransactionOrderIndependence())
 
     if args.limit_loops:
         m.register_plugin(LoopDepthLimiter())

@@ -629,6 +629,12 @@ class DetectUninitializedStorage(Detector):
         state.context.setdefault('{:s}.initialized_storage'.format(self.name), set()).add((address, offset))
 
 
+class DetectTransactionOrderIndependence(Detector):
+    '''Detects possible transaction order independence vulnerability'''
+    def did_evm_read_storage_callback(self, state, address, offset, value):
+        logger.warning('x'*10 + '%s %s %s %s', state, address, offset, value)
+
+
 def calculate_coverage(runtime_bytecode, seen):
     ''' Calculates what percentage of runtime_bytecode has been seen '''
     count, total = 0, 0
