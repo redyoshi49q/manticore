@@ -631,8 +631,35 @@ class DetectUninitializedStorage(Detector):
 
 class DetectTransactionOrderIndependence(Detector):
     '''Detects possible transaction order independence vulnerability'''
-    def did_evm_read_storage_callback(self, state, address, offset, value):
-        logger.warning('x'*10 + '%s %s %s %s', state, address, offset, value)
+    def did_evm_write_storage_callback(self, state, storage_address, offset, value):
+        state.context['test'] = (storage_address, state.platform.current_transaction)
+
+    def did_evm_execute_instruction_callback(self, state, instruction, arguments, result_ref):
+        # world = state.platform
+        # result = result_ref.value
+        # mnemonic = instruction.semantics
+        # result = result_ref.value
+
+        if instruction.semantics == 'CALL':
+            # gas = arguments[0]
+            dest_address = arguments[1]
+            # msg_sender = state.platform.current_vm.caller
+
+            storage_address, transaction = state.context.get('test', (0, 0))
+
+            if transaction == 0:
+                return
+
+            is_diff_transaction = transaction != state.platform.current_transaction
+            if issymbolic(dest_address):
+                pass
+
+            if is_diff_transaction and dest_address == storage_address:
+                vm = state.platform.current_vm
+                self.add_finding(state, vm.address, vm.pc, 'Potential transaction order dependency', False)
+
+            # if issymbolic(dest_address) or msg_sender == dest_address:
+            #     state.context.get(self._context_key, []).append((pc, is_enough_gas))
 
 
 def calculate_coverage(runtime_bytecode, seen):
