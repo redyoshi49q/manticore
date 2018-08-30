@@ -632,21 +632,43 @@ class DetectUninitializedStorage(Detector):
 class DetectTransactionOrderIndependence(Detector):
     '''Detects possible transaction order independence vulnerability'''
 
+
+    """
+    At `setstoredaddress` in the `SSTORE` you taint the slot with 'taint_setstoredaddress'
+    At `callstoredaddress` at the 'SLOAD' you read a value tainted with  'taint_setstoredaddress' (concrete or otherwise) 
+    at the `CALL` you check it taint(address) != 'taint_setstoredaddress'
+    
+    at the time of SSTORE or SLOAD the first 4 bytes in the CALLDATA must be constrained to a single solution / be concrete.
+    """
+
     def will_evm_write_storage_callback(self, state, storage_address, offset, value):
         pass
 
     def did_evm_write_storage_callback(self, state, storage_address, offset, value):
-        state.context['test'] = (storage_address, state.platform.current_transaction)
+        # Taint the storage slot with the stored value
+        taint_with(offset, 'written_storage_slots')
 
-    def will_evm_execute_instruction_callback(self, state, instruction, arguments):
-        if instruction.semantics in ('SSTORE', 'CALL'):
-            pass
+    def did_evm_read_storage_callback(self, state, storage_address, offset, value):
+        for slot in get_taints('written_storage_slots.*'):
+            if slot == offset:
+                func_hash = state.platform.current_transaction.data[:4]
+                state.context.setdefault('read_storage_slots', []).append((value, func_hash))
+
+    def did_evm_execute_instruction_callback(self, state, instruction, arguments):
+        mnemonic = instruction.semantics
+
+        if mnemonic == 'CALL':  # arg[0] - gas, arg[1] - dest_address
+
+            curr_func_id = state.platform.current_transaction.data[:4]
+            dest_address = arguments[1]
+
+            for val, func_id in state.context.get('read_storage_slots', []):
+                if val == dest_address and curr_func_id == func_id:
+                    vm = state.platform.current_vm
+                    self.add_finding(state, vm.address, vm.pc, 'Potential transaction order dependency', False)
 
     def did_evm_execute_instruction_callback(self, state, instruction, arguments, result_ref):
-        # world = state.platform
-        # result = result_ref.value
         mnemonic = instruction.semantics
-        # result = result_ref.value
 
         if mnemonic == 'SSTORE':
             # If an overflowded value is stored in the storage then it is a finding
@@ -655,7 +677,7 @@ class DetectTransactionOrderIndependence(Detector):
         if instruction.semantics == 'CALL':
             # gas = arguments[0]
             dest_address = arguments[1]
-            # msg_sender = state.platform.current_vm.caller
+            msg_sender = state.platform.current_vm.caller
 
             storage_address, transaction = state.context.get('test', (0, 0))
 
