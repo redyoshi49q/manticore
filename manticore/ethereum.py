@@ -631,14 +631,26 @@ class DetectUninitializedStorage(Detector):
 
 class DetectTransactionOrderIndependence(Detector):
     '''Detects possible transaction order independence vulnerability'''
+
+    def will_evm_write_storage_callback(self, state, storage_address, offset, value):
+        pass
+
     def did_evm_write_storage_callback(self, state, storage_address, offset, value):
         state.context['test'] = (storage_address, state.platform.current_transaction)
+
+    def will_evm_execute_instruction_callback(self, state, instruction, arguments):
+        if instruction.semantics in ('SSTORE', 'CALL'):
+            pass
 
     def did_evm_execute_instruction_callback(self, state, instruction, arguments, result_ref):
         # world = state.platform
         # result = result_ref.value
-        # mnemonic = instruction.semantics
+        mnemonic = instruction.semantics
         # result = result_ref.value
+
+        if mnemonic == 'SSTORE':
+            # If an overflowded value is stored in the storage then it is a finding
+            where, what = arguments
 
         if instruction.semantics == 'CALL':
             # gas = arguments[0]
